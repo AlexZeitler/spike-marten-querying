@@ -1,9 +1,9 @@
 using DockerCompose;
 using Marten;
 using Npgsql;
-using static WaitForPostgres.Database;
+using WaitForPostgres;
 
-namespace MartenQuerying.Test;
+namespace MartenQuerying.Tests.Embbeding;
 
 public class ScannedDocument
 {
@@ -43,7 +43,7 @@ public class UnitTest1
       Username = "marten"
     }.ToString();
 
-    await WaitForConnection(connectionString);
+    await Database.WaitForConnection(connectionString);
 
     using var store = DocumentStore.For(connectionString);
     await using var session = store.LightweightSession();
@@ -60,6 +60,10 @@ public class UnitTest1
     var documents = session.Query<ScannedDocument>().Where(d => d.PdfFilename.Contains("file")).ToList();
     Assert.Equal("Some file", documents.First().PdfFilename);
 
+    await session.Connection?.CloseAsync();
+    NpgsqlConnection.ClearAllPools();
+    
+    
     await compose.Down();
   }
 
@@ -81,7 +85,7 @@ public class UnitTest1
       Username = "marten"
     }.ToString();
 
-    await WaitForConnection(connectionString);
+    await Database.WaitForConnection(connectionString);
 
     using var store = DocumentStore.For(connectionString);
     await using var session = store.LightweightSession();
@@ -102,10 +106,13 @@ public class UnitTest1
     await session.SaveChangesAsync().ConfigureAwait(false);
 
     var documents =
-      session.Query<ScannedDocument>().Where(d => d.ScannedPages.Any(p => p.Text.Contains("Text")));
+      session.Query<ScannedDocument>().Where(d => Enumerable.Any<ScannedPage>(d.ScannedPages, p => p.Text.Contains("Text")));
 
     Assert.Equal(1, documents.Count());
 
+    await session.Connection?.CloseAsync();
+    NpgsqlConnection.ClearAllPools();
+    
     await compose.Down();
   }
 }
